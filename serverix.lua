@@ -6,7 +6,7 @@ local sha1 = require("sha1")
 
 LATEST_VERSION = "1.21.5" --latest available version of Minecraft
 
-local cores = {
+local cores = { --after imperative core downloading removal, this table is pretty useless, but i still prefer to leave it here
     "paper", 
     "purpur",
     "spigot",
@@ -46,149 +46,6 @@ local function saveServerProperties(tbl, filepath)
     print("✅ server.properties generated!")
 end
 
-
-local function runFzf(buildList)
-    local input = table.concat(buildList, "\n")
-    local tmp = os.tmpname()
-    local f = assert(io.open(tmp, "w"))
-    f:write(input)
-    f:close()
-
-    local handle = io.popen("fzf < " .. tmp)
-    local result = handle:read("*a")
-    handle:close()
-
-    os.remove(tmp)
-    return result:match("Build #%d+")
-end
-
-local function downloadCore(core, version, destination)
-    local builds_url
-    if core == "paper" then
-        builds_url = "https://api.papermc.io/v2/projects/paper/versions/"..version.."/builds"
-    elseif core == "purpur" then
-        builds_url = "https://api.purpurmc.org/v2/purpur/"..version
-    elseif core == "fabric" then
-        builds_url = "https://meta.fabricmc.net/v2/versions/loader"
-    else
-        error("Unsupported core: " .. core)
-    end
-
-    local body, code = https.request(builds_url)
-    if code ~= 200 then error("Failed to fetch builds list: HTTP "..tostring(code)) end
-    local parsed = json.decode(body)
-    if not parsed then error("Invalid JSON") end
-
-    local builds = {}
-    local displayList = {}
-
-    if core == "paper" then
-        builds = parsed.builds
-        for _, build in ipairs(builds) do
-            local b = build.build
-            local iso = build.time or ""
-            local y, m, d, H, M = iso:match("(%d+)%-(%d+)%-(%d+)T(%d+):(%d+)")
-            local formatted_time = "unknown"
-            if y and m and d and H and M then
-                formatted_time = os.date("%b %d, %Y %H:%M", os.time{
-                    year=tonumber(y), month=tonumber(m), day=tonumber(d),
-                    hour=tonumber(H), min=tonumber(M)
-                })
-            end
-            table.insert(displayList, string.format("Build #%d - %s", b, formatted_time))
-        end
-    elseif core == "purpur" then
-        builds = parsed.builds.all
-        for _, b in ipairs(builds) do
-            table.insert(displayList, "Build #" .. b)
-        end
-    elseif core == "fabric" then
-        -- For Fabric, we need to get loader versions and let user pick one
-        builds = parsed
-        for _, loader in ipairs(builds) do
-            if loader.stable then
-                table.insert(displayList, string.format("Loader %s (stable)", loader.version))
-            else
-                table.insert(displayList, string.format("Loader %s", loader.version))
-            end
-        end
-    end
-
-    -- Check if we have items in displayList
-    if #displayList == 0 then
-        error("No builds/versions found for " .. core)
-    end
-    
-    -- Try fzf first, fallback to manual selection if it fails
-    local selected_line = runFzf(displayList)
-    if not selected_line then 
-        print("unfortunately, fzf failed, so u need to use manual selection:")
-        print("\nAvailable options:")
-        for i, item in ipairs(displayList) do
-            print(string.format("%2d: %s", i, item))
-        end
-        
-        
-        io.write(string.format("\nSelect option (1[latest]-%d): ", #displayList))
-        local choice = io.read()
-        local choice_num = tonumber(choice)
-        
-        if not choice_num or choice_num < 1 or choice_num > #displayList then
-            error("Invalid selection. Please enter a number between 1 and " .. #displayList)
-        end
-        
-        selected_line = displayList[choice_num]
-        print("Selected: " .. selected_line)
-    end
-
-    local download_url
-    local filename
-
-    if core == "paper" then
-        local selected_build = selected_line:match("#(%d+)")
-        if not selected_build then error("Failed to extract build number.") end
-
-        local build_meta_url = string.format("https://api.papermc.io/v2/projects/paper/versions/%s/builds/%s", version, selected_build)
-        local meta_body, meta_code = https.request(build_meta_url)
-        if meta_code ~= 200 then error("Failed to get metadata") end
-        local meta = json.decode(meta_body)
-        filename = meta.downloads.application.name
-        download_url = string.format("https://api.papermc.io/v2/projects/paper/versions/%s/builds/%s/downloads/%s", version, selected_build, filename)
-    elseif core == "purpur" then
-        local selected_build = selected_line:match("#(%d+)")
-        if not selected_build then error("Failed to extract build number.") end
-
-        filename = "purpur-server.jar"
-        download_url = string.format("https://api.purpurmc.org/v2/purpur/%s/%s/download", version, selected_build)
-    elseif core == "fabric" then
-        local loader_version = selected_line:match("Loader ([%d%.]+)")
-        if not loader_version then error("Failed to extract loader version.") end
-
-        -- Get the latest installer version
-        local installer_url = "https://meta.fabricmc.net/v2/versions/installer"
-        local installer_body, installer_code = https.request(installer_url)
-        if installer_code ~= 200 then error("Failed to fetch installer versions: HTTP "..tostring(installer_code)) end
-        local installer_parsed = json.decode(installer_body)
-        if not installer_parsed or #installer_parsed == 0 then error("No installer versions found") end
-        
-        local installer_version = installer_parsed[1].version -- Get latest stable installer
-        
-        filename = string.format("fabric-server-%s-%s-%s.jar", version, loader_version, installer_version)
-        download_url = string.format("https://meta.fabricmc.net/v2/versions/loader/%s/%s/%s/server/jar", version, loader_version, installer_version)
-    end
-
-    print("Downloading "..filename.." ...")
-    local jar_body, jar_code = https.request(download_url)
-    if jar_code ~= 200 then error("Failed to download jar: HTTP "..tostring(jar_code)) end
-
-    local output = destination..filename
-    local f = assert(io.open(output, "wb"))
-    f:write(jar_body)
-    f:close()
-
-    print("✅ Saved to: "..output)
-    return filename
-end
 
 local function getFileName(path)
     return path:match("^.+[\\/](.+)$") or path  -- fallback to full string
@@ -236,21 +93,15 @@ function serverix.InitServer(server)
     local BukkitPlugins = server.server.bukkitPlugins
     local ServerCore = server.server.core
     local ServerMods = server.server.mods
-    local ServerName = server.server.properties.motd:gsub("[/\\]", "_") -- sanitize folder name
-    local ServerVersion = server.server.version
+    local ServerName = server.server.properties.motd:gsub("[/\\]", "_") 
     local ServerRunScript = server.server.runscript
     local ServerProperties = server.server.properties
-    local ServerFolder = server.server.folder  -- e.g. /home/denis/servers/
+    local ServerFolder = server.server.folder  
     local yml
 
-    -- check core
+    -- clear console
     os.execute("clear")
-    if not checkCore(ServerCore) then
-        print("[SERVERIX]: "..ServerCore.." is not an available core, available cores are: "..table.concat(cores, ", "))
-        return
-    end
-
-    local ServerFolder = server.server.folder
+    
 
     if io.open(ServerFolder.."serverix.yml") then
         local yml = vermgmt.readYml(ServerFolder)
@@ -261,16 +112,22 @@ function serverix.InitServer(server)
             os.execute("mkdir -p \""..newFolder.."\"")
             ServerFolder = newFolder
         else
-            print("[SERVERIX]: Matching config exists — skipping.")
+            print("[SERVERIX]: matching config exists — skipping.")
             return
         end
     end
 
-
-
     -- download server core
-    local DownloadedCore = downloadCore(ServerCore, ServerVersion, ServerFolder)
-    os.rename(ServerFolder..DownloadedCore, ServerFolder..ServerCore.."-server.jar")
+    
+    local DownloadedCore 
+    print("[SERVERIX]: downloading "..getFileName(ServerCore).."...")
+        print("[SERVERIX]: downloading "..ServerCore)
+        local body, code = https.request(ServerCore)
+        local output = ServerFolder.."server.jar"
+        local f = assert(io.open(output, "wb"))
+        f:write(body)
+        f:close()
+    --os.rename(output, ServerFolder..ServerCore.."-server.jar") renaming sequence is temporaly removed for deep thinking...
 
     -- write run.sh
     print("[SERVERIX]: creating run.sh")
@@ -320,7 +177,7 @@ function serverix.InitServer(server)
         end
     end
 
-    -- lock
+    -- generating lock
     vermgmt.generateYml(ServerFolder, ServerProperties)
 
     print("✅ "..ServerName.." built into: "..ServerFolder)
