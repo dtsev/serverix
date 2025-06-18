@@ -1,4 +1,6 @@
-<h3 align="center"><img src="misc/serverix.png" alt="serverix"><br>serverix - <i>build your minecraft server in semi-declarative way</i></h3>
+<h3 align="center"><img src="misc/serverix.png" alt="serverix"><br>serverix - <i>build your minecraft server in declarative way</i></h3>
+
+serverix is a lua script that allows you to create your minecraft server in a declarative way, it is designed for people who like to pre-configure things and get a ready-to-use product. serverix's killer feature is NixOS-inspired build system. When rebuilding an existing server (detected via a `serverix.yml` file), serverix automatically generates a new, uniquely versioned build. This allows you to easily roll back to any previous state if something goes wrong
 
 ## Usage
 Usage of `serverix` is pretty simple and straightforward:
@@ -13,7 +15,7 @@ local my_server = {
     server = {
         version = "1.20.1",
         core = "https://meta.fabricmc.net/v2/versions/loader/1.20.1/0.16.14/1.0.3/server/jar", --link to core's jar
-        folder = "/home/denis/purge-test-server/", --folder where server will be builded
+        folder = "/home/user/server/", --folder where server will be builded
         bukkitPlugins = nil, --plugins is nil, because we're on fabric in this example, if our server's core was e.g. Paper, our mods would be nil
         mods = mods, --table with your mods
         runscript = {
@@ -100,7 +102,7 @@ serverix.InitServer(  --initiate your server
 - `lyaml`
 
 > [!TIP]
-> It's recommended to install `luasec`, `sha1`, `lfs`, `lyaml` and `dkjson` using `luarocks`, but if you install it **correctly** in other, it **should** work fine
+> It's recommended to install `luasec`, `sha1`, `lfs`, `lyaml` and `dkjson` using `luarocks`, but if you still install it **correctly**, it **should** work fine
 
 ```bash
 git clone https://github.com/dtsev/serverix.git #clone this repo
