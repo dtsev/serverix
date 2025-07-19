@@ -9,7 +9,7 @@ Usage of `serverix` is pretty simple and straightforward:
 ```lua
 local serverix = require("serverix") 
 ```
-3. write configuration for your server, for detailed overview see wiki``
+3. write configuration for your server``
 ```lua
 local my_server = {
     server = {
