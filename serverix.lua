@@ -119,11 +119,10 @@ function serverix.InitServer(server)
 
     -- download server core
     
-    local DownloadedCore 
     print("[SERVERIX]: downloading "..getFileName(ServerCore).."...")
         print("[SERVERIX]: downloading "..ServerCore)
         local body, code = https.request(ServerCore)
-        local output = ServerFolder.."server.jar"
+        local output = ServerFolder.."server.jar" --all server cores are named server.jar
         local f = assert(io.open(output, "wb"))
         f:write(body)
         f:close()
